@@ -1,0 +1,29 @@
+{
+  "name": "salao-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chatbot de agendamento para salão de beleza no WhatsApp",
+  "type": "module",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "cli": "node --env-file-if-exists=.env src/cli.js",
+    "test": "node --env-file-if-exists=.env --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "db:up": "docker compose up -d postgres",
+    "db:reset": "docker compose down -v && docker compose up -d postgres",
+    "dev": "node --env-file-if-exists=.env src/server.js",
+    "sim": "node --env-file-if-exists=.env simulator/server.js",
+    "dev:sim": "node --env-file-if-exists=.env scripts/dev-sim.js"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^1.5.11",
+    "@langchain/core": "^1.2.13",
+    "@langchain/google-genai": "^2.3.2",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.5",
+    "express": "^5.2.1",
+    "langchain": "^1.5.14",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de WhatsApp</title>
+<style>
+  :root {
+    --cabecalho: #008069;
+    --painel: #f0f2f5;
+    --lista: #ffffff;
+    --papel: #efeae2;
+    --texto: #111b21;
+    --texto-fraco: #667781;
+    --linha: #e9edef;
+    --bolha-cliente: #d9fdd3;
+    --bolha-bot: #ffffff;
+    --equipe: #6d4bd8;
+    --bolha-equipe: #efe9ff;
+    --lido: #53bdeb;
+    --aviso: #fff3c4;
+    --erro: #b3261e;
+    --foco: #00a884;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --cabecalho: #202c33;
+      --painel: #202c33;
+      --lista: #111b21;
+      --papel: #0b141a;
+      --texto: #e9edef;
+      --texto-fraco: #8696a0;
+      --linha: #2a3942;
+      --bolha-cliente: #005c4b;
+      --bolha-bot: #202c33;
+      --bolha-equipe: #2d2549;
+      --equipe: #a58bff;
+      --aviso: #3b3417;
+      --erro: #f2b8b5;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 14.5px/1.4 "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--texto);
+    background: var(--papel);
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+
+  .app {
+    height: 100%;
+    display: grid;
+    grid-template-columns: 330px 1fr 300px;
+  }
+
+  /* ---------- contatos ---------- */
+  .contatos { display: flex; flex-direction: column; background: var(--lista); border-right: 1px solid var(--linha); min-width: 0; }
+  .contatos header { background: var(--painel); padding: 14px 16px; }
+  .contatos h1 { font-size: 16px; font-weight: 600; margin: 0 0 2px; }
+  .contatos header p { margin: 0; font-size: 13px; color: var(--texto-fraco); }
+  .novo { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--linha); }
+  .novo input { min-width: 0; padding: 7px 10px; border: 1px solid var(--linha); border-radius: 8px; background: var(--painel); }
+  .novo button { border: 0; border-radius: 8px; padding: 0 12px; background: var(--foco); color: #fff; font-weight: 600; cursor: pointer; }
+  .lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+  .lista button {
+    width: 100%; display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center;
+    padding: 10px 14px; border: 0; border-bottom: 1px solid var(--linha); background: none; text-align: left; cursor: pointer;
+  }
+  .lista button:hover, .lista button[aria-current="true"] { background: var(--painel); }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; color: #fff; background: #8da4b0; }
+  .avatar.dono { background: #d9a400; }
+  .resumo { min-width: 0; }
+  .resumo strong { display: block; font-weight: 500; }
+  .resumo span { display: block; font-size: 13px; color: var(--texto-fraco); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .novas { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--foco); color: #fff; font-size: 12px; display: grid; place-items: center; }
+  .resumo .selo-equipe { font-size: 11.5px; color: var(--equipe); font-weight: 600; }
+
+  /* ---------- conversa ---------- */
+  .conversa { display: flex; flex-direction: column; min-width: 0; background: var(--papel); }
+  .conversa > header {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--painel); border-bottom: 1px solid var(--linha); min-height: 60px;
+  }
+  .voltar { display: none; border: 0; background: none; font-size: 20px; cursor: pointer; padding: 4px 8px; }
+  .quem { flex: 1; min-width: 0; }
+  .quem strong { display: block; font-weight: 500; }
+  .quem span { font-size: 13px; color: var(--texto-fraco); }
+  .quem span.digitando { color: var(--foco); font-weight: 500; }
+  .abrir-agenda { display: none; border: 1px solid var(--linha); background: var(--lista); border-radius: 16px; padding: 5px 12px; cursor: pointer; }
+
+  .mensagens { flex: 1; overflow-y: auto; padding: 18px 7% 10px; display: flex; flex-direction: column; gap: 4px; }
+  .vazio { margin: auto; text-align: center; color: var(--texto-fraco); max-width: 38ch; }
+  .bolha {
+    max-width: min(65%, 520px); padding: 6px 9px 8px; border-radius: 8px; position: relative;
+    box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .bolha.cliente { align-self: flex-end; background: var(--bolha-cliente); }
+  .bolha.bot { align-self: flex-start; background: var(--bolha-bot); }
+  .bolha.equipe { align-self: flex-start; background: var(--bolha-equipe); border-left: 4px solid var(--equipe); }
+  .bolha.template { font-style: italic; }
+  .autor { display: block; font-size: 12.5px; font-weight: 600; color: var(--equipe); margin-bottom: 2px; }
+  .rodape { float: right; margin: 6px 0 -4px 12px; font-size: 11px; color: var(--texto-fraco); display: inline-flex; gap: 3px; align-items: center; }
+  .check { letter-spacing: -3px; padding-right: 3px; }
+  .check.lida { color: var(--lido); }
+
+  .envio { background: var(--painel); padding: 8px 12px 10px; border-top: 1px solid var(--linha); }
+  .modo { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .alternar { display: inline-flex; border: 1px solid var(--linha); border-radius: 18px; overflow: hidden; background: var(--lista); }
+  .alternar button { border: 0; background: none; padding: 5px 14px; cursor: pointer; font-size: 13px; }
+  .alternar button[aria-pressed="true"] { background: var(--foco); color: #fff; }
+  .alternar button.equipe[aria-pressed="true"] { background: var(--equipe); }
+  .dica { font-size: 12.5px; color: var(--texto-fraco); }
+  .devolver { margin-left: auto; border: 1px solid var(--equipe); color: var(--equipe); background: none; border-radius: 18px; padding: 4px 12px; cursor: pointer; font-size: 13px; }
+  .linha-envio { display: flex; gap: 8px; align-items: flex-end; }
+  .linha-envio textarea {
+    flex: 1; resize: none; max-height: 120px; min-height: 42px; padding: 10px 14px; border: 0; border-radius: 8px; background: var(--lista);
+  }
+  .midia, .enviar { border: 0; border-radius: 50%; width: 42px; height: 42px; cursor: pointer; font-size: 18px; flex: none; }
+  .midia { background: var(--lista); }
+  .midia[hidden] { display: none; }
+  .enviar { background: var(--foco); color: #fff; }
+  .envio.equipe .enviar { background: var(--equipe); }
+  .envio[hidden], .somente-leitura[hidden], .devolver[hidden] { display: none; }
+  .somente-leitura { padding: 14px; text-align: center; background: var(--painel); color: var(--texto-fraco); font-size: 13px; }
+
+  /* ---------- agenda ---------- */
+  .agenda { background: var(--lista); border-left: 1px solid var(--linha); display: flex; flex-direction: column; min-width: 0; }
+  .agenda header { padding: 14px 16px; background: var(--painel); display: flex; justify-content: space-between; align-items: center; }
+  .agenda h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .fechar-agenda { display: none; border: 0; background: none; font-size: 18px; cursor: pointer; }
+  .agenda ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+  .agenda li { padding: 10px 16px; border-bottom: 1px solid var(--linha); }
+  .agenda li strong { display: block; font-weight: 500; }
+  .agenda li span { display: block; font-size: 13px; color: var(--texto-fraco); }
+  .agenda .info { padding: 16px; color: var(--texto-fraco); font-size: 13px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(90vw, 520px);
+    padding: 10px 16px; border-radius: 8px; background: #323739; color: #fff; font-size: 13.5px; box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  }
+  .toast.erro { background: var(--erro); color: #fff; }
+  @media (prefers-color-scheme: dark) { .toast.erro { color: #410e0b; } }
+
+  /* ---------- telas menores ---------- */
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: 300px 1fr; }
+    .abrir-agenda { display: inline-block; }
+    .agenda { position: fixed; inset: 0 0 0 auto; width: min(320px, 90vw); z-index: 5; box-shadow: -4px 0 16px rgba(0,0,0,.2); transform: translateX(100%); visibility: hidden; transition: transform .2s ease, visibility .2s; }
+    .agenda.aberta { transform: none; visibility: visible; }
+    .fechar-agenda { display: block; }
+  }
+  @media (max-width: 720px) {
+    .app { grid-template-columns: 1fr; }
+    .app.na-conversa .contatos { display: none; }
+    .app:not(.na-conversa) .conversa { display: none; }
+    .voltar { display: block; }
+    .mensagens { padding: 14px 10px 8px; }
+    .bolha { max-width: 85%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="contatos" aria-label="Conversas">
+    <header>
+      <h1>Simulador de WhatsApp</h1>
+      <p>Você é a cliente. O bot responde por um WhatsApp de mentira.</p>
+    </header>
+    <form class="novo" id="novo">
+      <input id="novo-numero" inputmode="tel" placeholder="Número (5543...)" aria-label="Número do contato" required>
+      <input id="novo-nome" placeholder="Nome no perfil" aria-label="Nome no perfil do WhatsApp">
+      <button type="submit">Criar</button>
+    </form>
+    <ul class="lista" id="lista"></ul>
+  </aside>
+
+  <main class="conversa" aria-label="Conversa">
+    <header>
+      <button class="voltar" id="voltar" aria-label="Voltar para as conversas">←</button>
+      <div class="avatar" id="cab-avatar" aria-hidden="true">?</div>
+      <div class="quem">
+        <strong id="cab-nome">Nenhuma conversa aberta</strong>
+        <span id="cab-status">Crie um contato ao lado para começar</span>
+      </div>
+      <button class="abrir-agenda" id="abrir-agenda">Agenda</button>
+    </header>
+    <div class="mensagens" id="mensagens" aria-live="polite">
+      <p class="vazio">Crie um contato com um número e um nome, abra a conversa e mande um "oi" como se fosse a cliente.</p>
+    </div>
+    <div class="somente-leitura" id="somente-leitura" hidden>
+      Aqui chegam os avisos que o bot manda para a dona quando uma cliente pede atendimento humano.
+    </div>
+    <form class="envio" id="envio" hidden>
+      <div class="modo">
+        <div class="alternar" role="group" aria-label="Quem está escrevendo">
+          <button type="button" id="modo-cliente" aria-pressed="true">Como cliente</button>
+          <button type="button" id="modo-equipe" class="equipe" aria-pressed="false">Como equipe</button>
+        </div>
+        <span class="dica" id="dica">A mensagem vai para o bot pelo webhook.</span>
+        <button type="button" class="devolver" id="devolver" hidden>Devolver para o bot</button>
+      </div>
+      <div class="linha-envio">
+        <button type="button" class="midia" id="audio" aria-label="Enviar áudio" title="Enviar áudio">🎤</button>
+        <button type="button" class="midia" id="imagem" aria-label="Enviar imagem" title="Enviar imagem">🖼️</button>
+        <textarea id="texto" rows="1" placeholder="Mensagem" aria-label="Mensagem"></textarea>
+        <button type="submit" class="enviar" aria-label="Enviar">➤</button>
+      </div>
+    </form>
+  </main>
+
+  <aside class="agenda" id="agenda" aria-label="Próximos agendamentos">
+    <header>
+      <h2>Próximos agendamentos</h2>
+      <button class="fechar-agenda" id="fechar-agenda" aria-label="Fechar agenda">✕</button>
+    </header>
+    <ol id="agendamentos"><li class="info">Carregando…</li></ol>
+  </aside>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const contatos = new Map(); // whatsapp → { ...contato, mensagens, novas }
+  let aberto = null;
+  let modo = "cliente";
+
+  const hora = (ms) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const iniciais = (nome) => (nome.match(/\p{L}/gu) ?? ["?"]).slice(0, 2).join("").toUpperCase();
+
+  function el(tag, props = {}, filhos = []) {
+    const e = Object.assign(document.createElement(tag), props);
+    for (const f of [].concat(filhos)) if (f != null) e.append(f);
+    return e;
+  }
+
+  function toast(texto, erro = false) {
+    const t = el("div", { className: `toast${erro ? " erro" : ""}`, textContent: texto, role: "status" });
+    document.body.append(t);
+    setTimeout(() => t.remove(), erro ? 6000 : 3000);
+  }
+
+  async function api(caminho, corpo) {
+    const r = await fetch(caminho, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    const dados = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(dados.erro ?? `erro ${r.status}`);
+    return dados;
+  }
+
+  // ---------- lista de contatos ----------
+  const ultima = (c) => c.mensagens.at(-1);
+
+  function desenharLista() {
+    const ordenados = [...contatos.values()].sort((a, b) =>
+      (b.dono - a.dono) || ((ultima(b)?.hora ?? 0) - (ultima(a)?.hora ?? 0)));
+    $("lista").replaceChildren(...ordenados.map((c) => {
+      const u = ultima(c);
+      const previa = c.digitandoAte > Date.now() ? "digitando…" : u ? (u.autor === "cliente" ? "Você: " : "") + u.texto : "Sem mensagens";
+      const botao = el("button", { type: "button", onclick: () => abrir(c.whatsapp) }, [
+        el("div", { className: `avatar${c.dono ? " dono" : ""}`, textContent: c.dono ? "🔔" : iniciais(c.nome), ariaHidden: "true" }),
+        el("div", { className: "resumo" }, [
+          el("strong", { textContent: c.nome }),
+          el("span", { textContent: previa }),
+          c.comEquipe ? el("span", { className: "selo-equipe", textContent: "Com a equipe, bot pausado" }) : null,
+        ]),
+        c.novas ? el("span", { className: "novas", textContent: c.novas, ariaLabel: `${c.novas} novas` }) : el("span"),
+      ]);
+      if (c.whatsapp === aberto) botao.setAttribute("aria-current", "true");
+      return el("li", {}, botao);
+    }));
+  }
+
+  // ---------- conversa ----------
+  function bolha(m) {
+    const classes = ["bolha", m.autor, m.tipo === "template" ? "template" : ""].join(" ");
+    const rodape = el("span", { className: "rodape" }, [hora(m.hora)]);
+    if (m.autor === "cliente") {
+      rodape.append(el("span", { className: `check${m.lida ? " lida" : ""}`, textContent: m.lida ? "✓✓" : "✓", ariaLabel: m.lida ? "lida" : "enviada" }));
+    }
+    return el("div", { className: classes }, [
+      m.autor === "equipe" ? el("span", { className: "autor", textContent: "Equipe do salão (humano)" }) : null,
+      m.texto,
+      rodape,
+    ]);
+  }
+
+  function desenharConversa() {
+    const c = contatos.get(aberto);
+    const caixa = $("mensagens");
+    if (!c) return;
+    caixa.replaceChildren(...(c.mensagens.length
+      ? c.mensagens.map(bolha)
+      : [el("p", { className: "vazio", textContent: c.dono ? "Nenhum aviso por enquanto." : "Mande um \"oi\" como se fosse a cliente." })]));
+    caixa.scrollTop = caixa.scrollHeight;
+  }
+
+  function desenharCabecalho() {
+    const c = contatos.get(aberto);
+    if (!c) return;
+    $("cab-nome").textContent = c.nome;
+    $("cab-avatar").textContent = c.dono ? "🔔" : iniciais(c.nome);
+    $("cab-avatar").className = `avatar${c.dono ? " dono" : ""}`;
+    const status = $("cab-status");
+    const digitando = c.digitandoAte > Date.now();
+    status.className = digitando ? "digitando" : "";
+    status.textContent = digitando ? "digitando…"
+      : c.dono ? "Avisos de atendimento humano"
+      : c.comEquipe ? `+${c.whatsapp}, com a equipe (bot pausado)` : `+${c.whatsapp}`;
+    $("envio").hidden = c.dono;
+    $("somente-leitura").hidden = !c.dono;
+    $("devolver").hidden = !c.comEquipe;
+  }
+
+  function abrir(whatsapp) {
+    aberto = whatsapp;
+    const c = contatos.get(whatsapp);
+    c.novas = 0;
+    $("app").classList.add("na-conversa");
+    desenharLista();
+    desenharCabecalho();
+    desenharConversa();
+    if (!c.dono) $("texto").focus();
+  }
+
+  function definirModo(novo) {
+    modo = novo;
+    $("modo-cliente").setAttribute("aria-pressed", String(novo === "cliente"));
+    $("modo-equipe").setAttribute("aria-pressed", String(novo === "equipe"));
+    $("envio").classList.toggle("equipe", novo === "equipe");
+    $("audio").hidden = $("imagem").hidden = novo === "equipe";
+    $("texto").placeholder = novo === "equipe" ? "Resposta da equipe (pausa o bot)" : "Mensagem";
+    $("dica").textContent = novo === "equipe"
+      ? "Aparece como mensagem do salão e pausa o bot nesta conversa."
+      : "A mensagem vai para o bot pelo webhook.";
+  }
+
+  // "digitando" some sozinho depois do prazo (25 s) ou quando o bot responde.
+  setInterval(() => {
+    for (const c of contatos.values()) {
+      if (c.digitandoAte && c.digitandoAte <= Date.now()) {
+        c.digitandoAte = 0;
+        if (c.whatsapp === aberto) desenharCabecalho();
+        desenharLista();
+      }
+    }
+  }, 1000);
+
+  // ---------- eventos do simulador (SSE) ----------
+  const fonte = new EventSource("/events");
+  fonte.addEventListener("estado", (e) => {
+    const estado = JSON.parse(e.data);
+    contatos.clear();
+    for (const c of estado.contatos) contatos.set(c.whatsapp, { ...c, novas: 0 });
+    desenharLista();
+    if (aberto && contatos.has(aberto)) { desenharCabecalho(); desenharConversa(); }
+  });
+  fonte.addEventListener("contato", (e) => {
+    const c = JSON.parse(e.data);
+    const atual = contatos.get(c.whatsapp);
+    contatos.set(c.whatsapp, { mensagens: [], novas: 0, ...atual, ...c });
+    desenharLista();
+    if (c.whatsapp === aberto) desenharCabecalho();
+  });
+  fonte.addEventListener("mensagem", (e) => {
+    const { whatsapp, mensagem } = JSON.parse(e.data);
+    const c = contatos.get(whatsapp);
+    if (!c) return;
+    c.mensagens.push(mensagem);
+    if (mensagem.autor === "bot") c.digitandoAte = 0;
+    if (whatsapp !== aberto && mensagem.autor === "bot") c.novas = (c.novas ?? 0) + 1;
+    desenharLista();
+    if (whatsapp === aberto) { desenharCabecalho(); desenharConversa(); }
+  });
+  fonte.addEventListener("lida", (e) => {
+    const { whatsapp, ate } = JSON.parse(e.data);
+    const c = contatos.get(whatsapp);
+    if (!c) return;
+    const limite = c.mensagens.findIndex((m) => m.id === ate);
+    c.mensagens.slice(0, limite + 1).forEach((m) => { if (m.autor === "cliente") m.lida = true; });
+    if (whatsapp === aberto) desenharConversa();
+  });
+  fonte.addEventListener("digitando", (e) => {
+    const { whatsapp, ate } = JSON.parse(e.data);
+    const c = contatos.get(whatsapp);
+    if (!c) return;
+    c.digitandoAte = ate;
+    desenharLista();
+    if (whatsapp === aberto) desenharCabecalho();
+  });
+  fonte.addEventListener("erro", (e) => toast(JSON.parse(e.data).mensagem, true));
+  fonte.addEventListener("aviso", (e) => toast(JSON.parse(e.data).mensagem));
+  fonte.onerror = () => { $("cab-status").textContent = "Sem conexão com o simulador. Ele está rodando?"; };
+
+  // ---------- ações ----------
+  $("novo").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const c = await api("/api/contatos", { whatsapp: $("novo-numero").value, nome: $("novo-nome").value });
+      if (!contatos.has(c.whatsapp)) contatos.set(c.whatsapp, { ...c, mensagens: [], novas: 0 });
+      $("novo").reset();
+      abrir(c.whatsapp);
+    } catch (err) { toast(`Não criei o contato: ${err.message}`, true); }
+  });
+
+  async function enviar(tipo = "texto") {
+    const texto = $("texto").value.trim();
+    if (!aberto || (tipo === "texto" && !texto)) return;
+    try {
+      if (modo === "equipe") await api("/api/equipe", { whatsapp: aberto, texto });
+      else await api("/api/mensagens", { whatsapp: aberto, tipo, texto });
+      if (tipo === "texto") { $("texto").value = ""; ajustarAltura(); }
+    } catch { /* o simulador já avisa o erro pelo SSE */ }
+    $("texto").focus();
+  }
+
+  function ajustarAltura() {
+    const t = $("texto");
+    t.style.height = "auto";
+    t.style.height = `${Math.min(t.scrollHeight, 120)}px`;
+  }
+
+  $("envio").addEventListener("submit", (e) => { e.preventDefault(); enviar(); });
+  $("texto").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } });
+  $("texto").addEventListener("input", ajustarAltura);
+  $("audio").addEventListener("click", () => enviar("audio"));
+  $("imagem").addEventListener("click", () => enviar("imagem"));
+  $("modo-cliente").addEventListener("click", () => definirModo("cliente"));
+  $("modo-equipe").addEventListener("click", () => definirModo("equipe"));
+  $("devolver").addEventListener("click", async () => {
+    try { await api("/api/retomar", { whatsapp: aberto }); definirModo("cliente"); }
+    catch (err) { toast(`Não consegui devolver para o bot: ${err.message}`, true); }
+  });
+  $("voltar").addEventListener("click", () => $("app").classList.remove("na-conversa"));
+  $("abrir-agenda").addEventListener("click", () => $("agenda").classList.add("aberta"));
+  $("fechar-agenda").addEventListener("click", () => $("agenda").classList.remove("aberta"));
+
+  // ---------- agenda ----------
+  async function carregarAgenda() {
+    const lista = $("agendamentos");
+    try {
+      const r = await fetch("/api/agendamentos");
+      const dados = await r.json();
+      if (!r.ok) throw new Error(dados.erro);
+      lista.replaceChildren(...(dados.length
+        ? dados.map((a) => el("li", {}, [
+            el("strong", { textContent: `${a.quando}, ${a.servico}` }),
+            el("span", { textContent: `${a.cliente} com ${a.profissional}` }),
+          ]))
+        : [el("li", { className: "info", textContent: "Nenhum horário marcado. Os agendamentos feitos pelo bot aparecem aqui." })]));
+    } catch (err) {
+      lista.replaceChildren(el("li", { className: "info", textContent: `Não consegui ler a agenda: ${err.message}` }));
+    }
+  }
+  carregarAgenda();
+  setInterval(carregarAgenda, 10_000);
+</script>
+</body>
+</html>
